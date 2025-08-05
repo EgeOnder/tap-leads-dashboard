@@ -1,102 +1,92 @@
-import { useState, useEffect } from 'react';
+'use client';
+
+import { useEffect, useState } from 'react';
+import { authClient } from '@/lib/auth-client';
+
+interface User {
+	id: string;
+	email: string;
+	name?: string;
+	image?: string | null;
+	role?: string;
+}
 
 interface AuthState {
-	isAuthenticated: boolean;
+	user: User | null;
 	isLoading: boolean;
-	error: string;
+	isAuthenticated: boolean;
 }
 
 export function useAuth() {
 	const [authState, setAuthState] = useState<AuthState>({
-		isAuthenticated: false,
+		user: null,
 		isLoading: true,
-		error: '',
+		isAuthenticated: false,
 	});
 
-	// Check authentication status on mount
 	useEffect(() => {
-		checkAuthStatus();
+		const checkAuth = async () => {
+			try {
+				const { data: session, error } = await authClient.getSession();
+
+				if (error) {
+					console.error('Session error:', error);
+					setAuthState({
+						user: null,
+						isLoading: false,
+						isAuthenticated: false,
+					});
+					return;
+				}
+
+				if (session) {
+					setAuthState({
+						user: {
+							...session.user,
+							role: session.user.role || undefined,
+						},
+						isLoading: false,
+						isAuthenticated: true,
+					});
+				} else {
+					setAuthState({
+						user: null,
+						isLoading: false,
+						isAuthenticated: false,
+					});
+				}
+			} catch (error) {
+				console.error('Auth check error:', error);
+				setAuthState({
+					user: null,
+					isLoading: false,
+					isAuthenticated: false,
+				});
+			}
+		};
+
+		checkAuth();
 	}, []);
 
-	const checkAuthStatus = async () => {
+	const signOut = async () => {
 		try {
-			const response = await fetch('/api/auth/verify');
-			const data = await response.json();
-
-			setAuthState({
-				isAuthenticated: data.authenticated,
-				isLoading: false,
-				error: '',
-			});
-		} catch (error) {
-			setAuthState({
-				isAuthenticated: false,
-				isLoading: false,
-				error: 'Failed to verify authentication status',
-			});
-		}
-	};
-
-	const login = async (password: string): Promise<boolean> => {
-		setAuthState((prev) => ({ ...prev, isLoading: true, error: '' }));
-
-		try {
-			const response = await fetch('/api/auth/login', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({ password }),
-			});
-
-			const data = await response.json();
-
-			if (response.ok) {
-				setAuthState({
-					isAuthenticated: true,
-					isLoading: false,
-					error: '',
-				});
-				return true;
+			const { error } = await authClient.signOut();
+			if (error) {
+				console.error('Sign out error:', error);
 			} else {
 				setAuthState({
-					isAuthenticated: false,
+					user: null,
 					isLoading: false,
-					error: data.error || 'Login failed',
+					isAuthenticated: false,
 				});
-				return false;
 			}
 		} catch (error) {
-			setAuthState({
-				isAuthenticated: false,
-				isLoading: false,
-				error: 'Network error occurred',
-			});
-			return false;
+			console.error('Sign out error:', error);
 		}
-	};
-
-	const logout = async () => {
-		setAuthState((prev) => ({ ...prev, isLoading: true }));
-
-		try {
-			await fetch('/api/auth/logout', {
-				method: 'POST',
-			});
-		} catch (error) {
-			console.error('Logout error:', error);
-		}
-
-		setAuthState({
-			isAuthenticated: false,
-			isLoading: false,
-			error: '',
-		});
 	};
 
 	return {
 		...authState,
-		login,
-		logout,
+		signOut,
 	};
 }

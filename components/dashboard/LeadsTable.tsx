@@ -34,6 +34,10 @@ import {
 	User,
 	Building,
 	MapPin,
+	Tag,
+	Plus,
+	X,
+	Users,
 } from 'lucide-react';
 import {
 	Tooltip,
@@ -48,20 +52,98 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import React from 'react';
 import Link from 'next/link';
 
-interface LeadsTableProps {
-	leads: any[];
+interface Tag {
+	id: number;
+	name: string;
+	color: string;
+	description?: string;
+	createdBy: string;
 }
 
-export function LeadsTable({ leads }: LeadsTableProps) {
+interface User {
+	id: string;
+	name: string;
+	email: string;
+}
+
+interface Lead {
+	id: number;
+	name?: string;
+	email?: string;
+	phone?: string;
+	jobTitle?: string;
+	location?: string;
+	company?: string;
+	description?: string;
+	contactLink?: string;
+	websiteId: number;
+	websiteUrl?: string;
+	assignedTo?: string;
+	assignedToUser?: User;
+	tags?: Tag[];
+	createdAt: Date;
+	updatedAt: Date;
+}
+
+interface LeadsTableProps {
+	leads: Lead[];
+	users: User[];
+	tags: Tag[];
+	currentUser: User;
+	onAssignLead?: (leadId: number, userId: string | null) => Promise<void>;
+	onAddTag?: (leadId: number, tagId: number) => Promise<void>;
+	onRemoveTag?: (leadId: number, tagId: number) => Promise<void>;
+	onCreateTag?: (
+		name: string,
+		color: string,
+		description?: string
+	) => Promise<Tag>;
+}
+
+export function LeadsTable({
+	leads,
+	users,
+	tags,
+	currentUser,
+	onAssignLead,
+	onAddTag,
+	onRemoveTag,
+	onCreateTag,
+}: LeadsTableProps) {
 	const [searchTerm, setSearchTerm] = useState('');
 	const [companyFilter, setCompanyFilter] = useState<string>('all');
 	const [websiteFilter, setWebsiteFilter] = useState<string>('all');
+	const [userFilter, setUserFilter] = useState<string>('all');
+	const [tagFilter, setTagFilter] = useState<string>('all');
 	const [currentPage, setCurrentPage] = useState(1);
 	const [itemsPerPage, setItemsPerPage] = useState(10);
+	const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+	const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
+	const [isCreateTagDialogOpen, setIsCreateTagDialogOpen] = useState(false);
+	const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+	const [newTagName, setNewTagName] = useState('');
+	const [newTagColor, setNewTagColor] = useState('#3b82f6');
+	const [newTagDescription, setNewTagDescription] = useState('');
+	const [isEditTagDialogOpen, setIsEditTagDialogOpen] = useState(false);
+	const [editingTag, setEditingTag] = useState<Tag | null>(null);
+	const [editTagName, setEditTagName] = useState('');
+	const [editTagColor, setEditTagColor] = useState('#3b82f6');
+	const [editTagDescription, setEditTagDescription] = useState('');
+	const [isManageTagsDialogOpen, setIsManageTagsDialogOpen] = useState(false);
 	const { toast } = useToast();
 
 	const filteredLeads = leads.filter((lead) => {
@@ -79,18 +161,36 @@ export function LeadsTable({ leads }: LeadsTableProps) {
 				.toLowerCase()
 				.includes(searchTerm.toLowerCase());
 		const matchesCompany =
-			companyFilter === 'all' || lead.company === companyFilter;
+			companyFilter === 'all' || (lead.company || '') === companyFilter;
 		const matchesWebsite =
 			websiteFilter === 'all' ||
-			(lead.websiteUrl &&
-				new URL(lead.websiteUrl).hostname === websiteFilter);
-		return matchesSearch && matchesCompany && matchesWebsite;
+			((lead.websiteUrl || '') &&
+				new URL(lead.websiteUrl || 'http://example.com').hostname ===
+					websiteFilter);
+		const matchesUser =
+			userFilter === 'all' ||
+			(userFilter === 'unassigned'
+				? !lead.assignedTo
+				: (lead.assignedTo || '') === userFilter);
+		const matchesTag =
+			tagFilter === 'all' ||
+			(tagFilter === 'untagged'
+				? !lead.tags || lead.tags.length === 0
+				: lead.tags &&
+				  lead.tags.some((tag) => tag.id.toString() === tagFilter));
+		return (
+			matchesSearch &&
+			matchesCompany &&
+			matchesWebsite &&
+			matchesUser &&
+			matchesTag
+		);
 	});
 
 	// Reset to first page when filters change
 	React.useEffect(() => {
 		setCurrentPage(1);
-	}, [searchTerm, companyFilter, websiteFilter]);
+	}, [searchTerm, companyFilter, websiteFilter, userFilter, tagFilter]);
 
 	// Pagination logic
 	const totalItems = filteredLeads.length;
@@ -108,7 +208,7 @@ export function LeadsTable({ leads }: LeadsTableProps) {
 			leads
 				.map((lead) => lead.websiteUrl)
 				.filter(Boolean)
-				.map((url) => new URL(url).hostname)
+				.map((url) => new URL(url ?? 'http://example.com').hostname)
 		)
 	);
 
@@ -137,19 +237,174 @@ export function LeadsTable({ leads }: LeadsTableProps) {
 		}
 	};
 
+	const handleAssignLead = async (userId: string | null) => {
+		if (!selectedLead || !onAssignLead) return;
+
+		try {
+			await onAssignLead(selectedLead.id, userId);
+			toast({
+				title: 'Success',
+				description: userId
+					? `Lead assigned to ${
+							users.find((u) => u.id === userId)?.name
+					  }`
+					: 'Lead unassigned',
+			});
+			setIsAssignDialogOpen(false);
+			setSelectedLead(null);
+		} catch (error) {
+			toast({
+				title: 'Error',
+				description: 'Failed to assign lead',
+				variant: 'destructive',
+			});
+		}
+	};
+
+	const handleAddTag = async (tagId: number) => {
+		if (!selectedLead || !onAddTag) return;
+
+		try {
+			await onAddTag(selectedLead.id, tagId);
+			toast({
+				title: 'Success',
+				description: 'Tag added to lead',
+			});
+			setIsTagDialogOpen(false);
+			setSelectedLead(null);
+		} catch (error) {
+			toast({
+				title: 'Error',
+				description: 'Failed to add tag',
+				variant: 'destructive',
+			});
+		}
+	};
+
+	const handleRemoveTag = async (leadId: number, tagId: number) => {
+		if (!onRemoveTag) return;
+
+		try {
+			await onRemoveTag(leadId, tagId);
+			toast({
+				title: 'Success',
+				description: 'Tag removed from lead',
+			});
+		} catch (error) {
+			toast({
+				title: 'Error',
+				description: 'Failed to remove tag',
+				variant: 'destructive',
+			});
+		}
+	};
+
+	const handleCreateTag = async () => {
+		if (!onCreateTag || !newTagName.trim()) return;
+
+		try {
+			await onCreateTag(
+				newTagName.trim(),
+				newTagColor,
+				newTagDescription.trim() || undefined
+			);
+			toast({
+				title: 'Success',
+				description: 'Tag created successfully',
+			});
+			setIsCreateTagDialogOpen(false);
+			setNewTagName('');
+			setNewTagColor('#3b82f6');
+			setNewTagDescription('');
+		} catch (error) {
+			toast({
+				title: 'Error',
+				description: 'Failed to create tag',
+				variant: 'destructive',
+			});
+		}
+	};
+
+	const openAssignDialog = (lead: Lead) => {
+		setSelectedLead(lead);
+		setIsAssignDialogOpen(true);
+	};
+
+	const openTagDialog = (lead: Lead) => {
+		setSelectedLead(lead);
+		setIsTagDialogOpen(true);
+	};
+
+	// Handler to open edit dialog
+	const openEditTagDialog = (tag: Tag) => {
+		setEditingTag(tag);
+		setEditTagName(tag.name);
+		setEditTagColor(tag.color);
+		setEditTagDescription(tag.description || '');
+		setIsEditTagDialogOpen(true);
+	};
+
+	// Handler to update tag
+	const handleUpdateTag = async () => {
+		if (!editingTag) return;
+		try {
+			const response = await fetch(`/api/tags?id=${editingTag.id}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					name: editTagName.trim(),
+					color: editTagColor,
+					description: editTagDescription.trim(),
+				}),
+			});
+			if (response.ok) {
+				toast({ title: 'Success', description: 'Tag updated' });
+				setIsEditTagDialogOpen(false);
+				setEditingTag(null);
+				// Optionally, refresh tags in parent
+				if (typeof window !== 'undefined') window.location.reload();
+			} else {
+				throw new Error('Failed to update tag');
+			}
+		} catch (error) {
+			toast({
+				title: 'Error',
+				description: 'Failed to update tag',
+				variant: 'destructive',
+			});
+		}
+	};
+
+	// Handler to delete tag
+	const handleDeleteTag = async (tagId: number) => {
+		if (!window.confirm('Are you sure you want to delete this tag?'))
+			return;
+		try {
+			const response = await fetch(`/api/tags?id=${tagId}`, {
+				method: 'DELETE',
+			});
+			if (response.ok) {
+				toast({ title: 'Success', description: 'Tag deleted' });
+				if (typeof window !== 'undefined') window.location.reload();
+			} else {
+				throw new Error('Failed to delete tag');
+			}
+		} catch (error) {
+			toast({
+				title: 'Error',
+				description: 'Failed to delete tag',
+				variant: 'destructive',
+			});
+		}
+	};
+
 	return (
 		<TooltipProvider>
 			<Card className="bg-card border-border shadow-sm">
 				<CardHeader>
-					<div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-						<h1 className="text-2xl font-bold text-foreground">
-							Leads available for{' '}
-							{companyFilter === 'all'
-								? 'all companies'
-								: companyFilter}
-						</h1>
-						<div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
-							<div className="relative">
+					<div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+						<div className="flex flex-col xl:flex-row gap-2 w-full flex-1">
+							<div className="relative w-full flex-1">
 								<Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
 								<Input
 									placeholder="Search leads..."
@@ -157,52 +412,101 @@ export function LeadsTable({ leads }: LeadsTableProps) {
 									onChange={(e) =>
 										setSearchTerm(e.target.value)
 									}
-									className="pl-10 bg-background border-input text-foreground focus:border-ring focus:ring-ring w-full sm:w-64"
+									className="pl-10 bg-background border-input text-foreground focus:border-ring focus:ring-ring w-full"
 								/>
 							</div>
-							<Select
-								onValueChange={setCompanyFilter}
-								value={companyFilter}
-							>
-								<SelectTrigger className="w-full sm:w-[180px]">
-									<SelectValue placeholder="Select Company" />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="all">
-										All Companies
-									</SelectItem>
-									{uniqueCompanies.map((company) => (
-										<SelectItem
-											key={company}
-											value={company}
-										>
-											{company}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-							<Select
-								onValueChange={setWebsiteFilter}
-								value={websiteFilter}
-							>
-								<SelectTrigger className="w-full sm:w-[180px]">
-									<SelectValue placeholder="Select Website" />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="all">
-										All Websites
-									</SelectItem>
-									{uniqueWebsites.map((website) => (
-										<SelectItem
-											key={website}
-											value={website}
-										>
-											{website}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
 						</div>
+						<Select
+							onValueChange={setCompanyFilter}
+							value={companyFilter}
+						>
+							<SelectTrigger className="w-full xl:w-[180px]">
+								<SelectValue placeholder="Select Company" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">
+									All Companies
+								</SelectItem>
+								{uniqueCompanies.map((company) => (
+									<SelectItem
+										key={company}
+										value={String(company ?? '')}
+									>
+										{company}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+						<Select
+							onValueChange={setWebsiteFilter}
+							value={websiteFilter}
+						>
+							<SelectTrigger className="w-full xl:w-[180px]">
+								<SelectValue placeholder="Select Website" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">
+									All Websites
+								</SelectItem>
+								{uniqueWebsites.map((website) => (
+									<SelectItem
+										key={website}
+										value={String(website ?? '')}
+									>
+										{website}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+						<Select
+							onValueChange={setUserFilter}
+							value={userFilter}
+						>
+							<SelectTrigger className="w-full xl:w-[180px]">
+								<SelectValue placeholder="Select User" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">All Users</SelectItem>
+								<SelectItem value="unassigned">
+									Unassigned
+								</SelectItem>
+								{users.map((user) => (
+									<SelectItem
+										key={user.id}
+										value={String(user.id ?? '')}
+									>
+										{user.name}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+						<Select onValueChange={setTagFilter} value={tagFilter}>
+							<SelectTrigger className="w-full xl:w-[180px]">
+								<SelectValue placeholder="Select Tag" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">All Tags</SelectItem>
+								<SelectItem value="untagged">
+									Untagged
+								</SelectItem>
+								{tags.map((tag) => (
+									<SelectItem
+										key={tag.id}
+										value={String(tag.id ?? '')}
+									>
+										{tag.name}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+						<Button
+							variant="outline"
+							onClick={() => setIsManageTagsDialogOpen(true)}
+							className="flex items-center gap-2 xl:w-auto w-full"
+						>
+							<Tag className="w-4 h-4" />
+							Manage Tags
+						</Button>
 					</div>
 				</CardHeader>
 				<CardContent>
@@ -223,7 +527,10 @@ export function LeadsTable({ leads }: LeadsTableProps) {
 										Website
 									</TableHead>
 									<TableHead className="text-foreground font-medium">
-										Location
+										Assigned To
+									</TableHead>
+									<TableHead className="text-foreground font-medium">
+										Tags
 									</TableHead>
 									<TableHead className="text-foreground font-medium">
 										Actions
@@ -272,7 +579,8 @@ export function LeadsTable({ leads }: LeadsTableProps) {
 													>
 														{
 															new URL(
-																lead.websiteUrl
+																lead.websiteUrl ??
+																	'http://example.com'
 															).hostname
 														}
 														<ExternalLink className="w-3 h-3 ml-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute -right-4 top-0" />
@@ -284,8 +592,64 @@ export function LeadsTable({ leads }: LeadsTableProps) {
 												</span>
 											)}
 										</TableCell>
-										<TableCell className="text-foreground">
-											{lead.location || 'Not specified'}
+										<TableCell>
+											{lead.assignedToUser ? (
+												<div className="flex items-center space-x-2">
+													<User className="w-4 h-4 text-muted-foreground" />
+													<span className="text-sm text-foreground">
+														{
+															lead.assignedToUser
+																.name
+														}
+													</span>
+												</div>
+											) : (
+												<span className="text-sm text-muted-foreground">
+													Unassigned
+												</span>
+											)}
+										</TableCell>
+										<TableCell>
+											<div className="flex flex-wrap gap-1">
+												{lead.tags &&
+												lead.tags.length > 0 ? (
+													lead.tags.map((tag) => (
+														<Badge
+															key={tag.id}
+															variant="secondary"
+															className="text-xs"
+															style={{
+																backgroundColor:
+																	tag.color +
+																	'20',
+																color: tag.color,
+																borderColor:
+																	tag.color +
+																	'40',
+															}}
+														>
+															{tag.name}
+															<Button
+																variant="ghost"
+																size="sm"
+																className="h-4 w-4 p-0 ml-1 hover:bg-transparent"
+																onClick={() =>
+																	handleRemoveTag(
+																		lead.id,
+																		tag.id
+																	)
+																}
+															>
+																<X className="w-3 h-3" />
+															</Button>
+														</Badge>
+													))
+												) : (
+													<span className="text-sm text-muted-foreground">
+														No tags
+													</span>
+												)}
+											</div>
 										</TableCell>
 										<TableCell>
 											<div className="flex items-center gap-2">
@@ -364,6 +728,44 @@ export function LeadsTable({ leads }: LeadsTableProps) {
 														</TooltipContent>
 													</Tooltip>
 												)}
+												<Tooltip delayDuration={0}>
+													<TooltipTrigger asChild>
+														<Button
+															variant="ghost"
+															size="sm"
+															className="text-muted-foreground hover:text-foreground hover:bg-accent"
+															onClick={() =>
+																openAssignDialog(
+																	lead
+																)
+															}
+														>
+															<Users className="w-4 h-4" />
+														</Button>
+													</TooltipTrigger>
+													<TooltipContent>
+														<p>Assign lead</p>
+													</TooltipContent>
+												</Tooltip>
+												<Tooltip delayDuration={0}>
+													<TooltipTrigger asChild>
+														<Button
+															variant="ghost"
+															size="sm"
+															className="text-muted-foreground hover:text-foreground hover:bg-accent"
+															onClick={() =>
+																openTagDialog(
+																	lead
+																)
+															}
+														>
+															<Tag className="w-4 h-4" />
+														</Button>
+													</TooltipTrigger>
+													<TooltipContent>
+														<p>Manage tags</p>
+													</TooltipContent>
+												</Tooltip>
 												<DropdownMenu>
 													<DropdownMenuTrigger
 														asChild
@@ -384,7 +786,8 @@ export function LeadsTable({ leads }: LeadsTableProps) {
 															<DropdownMenuItem
 																onClick={() =>
 																	copyToClipboard(
-																		lead.email,
+																		lead.email ??
+																			'',
 																		'Email'
 																	)
 																}
@@ -412,7 +815,8 @@ export function LeadsTable({ leads }: LeadsTableProps) {
 															<DropdownMenuItem
 																onClick={() =>
 																	copyToClipboard(
-																		lead.name,
+																		lead.name ??
+																			'',
 																		'Name'
 																	)
 																}
@@ -426,7 +830,8 @@ export function LeadsTable({ leads }: LeadsTableProps) {
 															<DropdownMenuItem
 																onClick={() =>
 																	copyToClipboard(
-																		lead.company,
+																		lead.company ??
+																			'',
 																		'Company'
 																	)
 																}
@@ -440,7 +845,8 @@ export function LeadsTable({ leads }: LeadsTableProps) {
 															<DropdownMenuItem
 																onClick={() =>
 																	copyToClipboard(
-																		lead.websiteUrl,
+																		lead.websiteUrl ??
+																			'',
 																		'Website URL'
 																	)
 																}
@@ -454,7 +860,8 @@ export function LeadsTable({ leads }: LeadsTableProps) {
 															<DropdownMenuItem
 																onClick={() =>
 																	copyToClipboard(
-																		lead.location,
+																		lead.location ??
+																			'',
 																		'Location'
 																	)
 																}
@@ -468,7 +875,8 @@ export function LeadsTable({ leads }: LeadsTableProps) {
 															<DropdownMenuItem
 																onClick={() =>
 																	copyToClipboard(
-																		lead.phone,
+																		lead.phone ??
+																			'',
 																		'Phone'
 																	)
 																}
@@ -515,14 +923,14 @@ export function LeadsTable({ leads }: LeadsTableProps) {
 
 					{/* Pagination Controls */}
 					{filteredLeads.length > 0 && (
-						<div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-border">
+						<div className="flex flex-col xl:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-border">
 							<div className="flex items-center gap-2 text-sm text-muted-foreground">
 								<span>
 									Showing {startIndex + 1} to{' '}
 									{Math.min(endIndex, totalItems)} of{' '}
 									{totalItems} leads
 								</span>
-								<span className="hidden sm:inline">•</span>
+								<span className="hidden xl:inline">•</span>
 								<Select
 									value={itemsPerPage.toString()}
 									onValueChange={(value) => {
@@ -632,6 +1040,477 @@ export function LeadsTable({ leads }: LeadsTableProps) {
 						</div>
 					)}
 				</CardContent>
+
+				{/* Assign Lead Dialog */}
+				<Dialog
+					open={isAssignDialogOpen}
+					onOpenChange={setIsAssignDialogOpen}
+				>
+					<DialogContent>
+						<DialogHeader>
+							<DialogTitle>Assign Lead</DialogTitle>
+							<DialogDescription>
+								Assign this lead to a user or unassign it.
+							</DialogDescription>
+						</DialogHeader>
+						<div className="space-y-4">
+							<div className="grid gap-2">
+								<label className="text-sm font-medium">
+									Current Assignment
+								</label>
+								<p className="text-sm text-muted-foreground">
+									{selectedLead?.assignedToUser?.name ||
+										'Unassigned'}
+								</p>
+							</div>
+							<div className="grid gap-2">
+								<label className="text-sm font-medium">
+									Assign to
+								</label>
+								<Select
+									onValueChange={(value) =>
+										handleAssignLead(
+											value === 'unassigned'
+												? null
+												: value
+										)
+									}
+								>
+									<SelectTrigger>
+										<SelectValue placeholder="Select a user" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="unassigned">
+											Unassigned
+										</SelectItem>
+										{users.map((user) => (
+											<SelectItem
+												key={user.id}
+												value={String(user.id ?? '')}
+											>
+												{user.name}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
+						</div>
+						<DialogFooter>
+							<Button
+								variant="outline"
+								onClick={() => setIsAssignDialogOpen(false)}
+							>
+								Cancel
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
+
+				{/* Add Tag Dialog */}
+				<Dialog
+					open={isTagDialogOpen}
+					onOpenChange={setIsTagDialogOpen}
+				>
+					<DialogContent className="max-w-2xl">
+						<DialogHeader>
+							<DialogTitle>Manage Tags</DialogTitle>
+							<DialogDescription>
+								Add tags to this lead, create new tags, or
+								manage existing tags.
+							</DialogDescription>
+						</DialogHeader>
+						<div className="space-y-6">
+							{/* Current Tags Section */}
+							<div className="grid gap-2">
+								<label className="text-sm font-medium">
+									Current Tags on This Lead
+								</label>
+								<div className="flex flex-wrap gap-1">
+									{selectedLead?.tags &&
+									selectedLead.tags.length > 0 ? (
+										selectedLead.tags.map((tag) => (
+											<Badge
+												key={tag.id}
+												variant="secondary"
+												className="text-xs"
+												style={{
+													backgroundColor:
+														tag.color + '20',
+													color: tag.color,
+													borderColor:
+														tag.color + '40',
+												}}
+											>
+												{tag.name}
+											</Badge>
+										))
+									) : (
+										<span className="text-sm text-muted-foreground">
+											No tags assigned to this lead
+										</span>
+									)}
+								</div>
+							</div>
+
+							{/* Add Tag Section */}
+							<div className="grid gap-2">
+								<label className="text-sm font-medium">
+									Add Tag to This Lead
+								</label>
+								<Select
+									onValueChange={(value) =>
+										handleAddTag(parseInt(value))
+									}
+								>
+									<SelectTrigger>
+										<SelectValue placeholder="Select a tag to add" />
+									</SelectTrigger>
+									<SelectContent>
+										{tags
+											.filter(
+												(tag) =>
+													!selectedLead?.tags?.some(
+														(leadTag) =>
+															leadTag.id ===
+															tag.id
+													)
+											)
+											.map((tag) => (
+												<SelectItem
+													key={tag.id}
+													value={String(tag.id ?? '')}
+												>
+													{tag.name}
+												</SelectItem>
+											))}
+									</SelectContent>
+								</Select>
+							</div>
+
+							{/* Tag Management Section */}
+							<div className="grid gap-2">
+								<label className="text-sm font-medium">
+									Manage All Tags
+								</label>
+								<div className="border rounded-lg p-4 space-y-3">
+									{tags.length > 0 ? (
+										tags.map((tag) => (
+											<div
+												key={tag.id}
+												className="flex items-center justify-between p-3 border rounded bg-muted/20"
+											>
+												<div className="flex items-center gap-3">
+													<div
+														className="w-4 h-4 rounded"
+														style={{
+															backgroundColor:
+																tag.color,
+														}}
+													/>
+													<div>
+														<div className="font-medium text-sm">
+															{tag.name}
+														</div>
+														{tag.description && (
+															<div className="text-xs text-muted-foreground">
+																{
+																	tag.description
+																}
+															</div>
+														)}
+													</div>
+												</div>
+												<div className="flex items-center gap-2">
+													<Button
+														size="sm"
+														variant="outline"
+														onClick={() =>
+															openEditTagDialog(
+																tag
+															)
+														}
+													>
+														Edit
+													</Button>
+													<Button
+														size="sm"
+														variant="destructive"
+														onClick={() =>
+															handleDeleteTag(
+																tag.id
+															)
+														}
+													>
+														Delete
+													</Button>
+												</div>
+											</div>
+										))
+									) : (
+										<div className="text-center py-4 text-muted-foreground">
+											No tags available
+										</div>
+									)}
+								</div>
+							</div>
+
+							{/* Create New Tag Section */}
+							<div className="flex items-center gap-2">
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() =>
+										setIsCreateTagDialogOpen(true)
+									}
+									className="flex items-center gap-2"
+								>
+									<Plus className="w-4 h-4" />
+									Create New Tag
+								</Button>
+							</div>
+						</div>
+						<DialogFooter>
+							<Button
+								variant="outline"
+								onClick={() => setIsTagDialogOpen(false)}
+							>
+								Close
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
+
+				{/* Create Tag Dialog */}
+				<Dialog
+					open={isCreateTagDialogOpen}
+					onOpenChange={setIsCreateTagDialogOpen}
+				>
+					<DialogContent>
+						<DialogHeader>
+							<DialogTitle>Create New Tag</DialogTitle>
+							<DialogDescription>
+								Create a new tag that will be available to all
+								users.
+							</DialogDescription>
+						</DialogHeader>
+						<div className="space-y-4">
+							<div className="grid gap-2">
+								<label className="text-sm font-medium">
+									Tag Name
+								</label>
+								<Input
+									placeholder="Enter tag name"
+									value={newTagName}
+									onChange={(e) =>
+										setNewTagName(e.target.value)
+									}
+								/>
+							</div>
+							<div className="grid gap-2">
+								<label className="text-sm font-medium">
+									Color
+								</label>
+								<Input
+									type="color"
+									value={newTagColor}
+									onChange={(e) =>
+										setNewTagColor(e.target.value)
+									}
+									className="w-20 h-10"
+								/>
+							</div>
+							<div className="grid gap-2">
+								<label className="text-sm font-medium">
+									Description (Optional)
+								</label>
+								<Input
+									placeholder="Enter description"
+									value={newTagDescription}
+									onChange={(e) =>
+										setNewTagDescription(e.target.value)
+									}
+								/>
+							</div>
+						</div>
+						<DialogFooter>
+							<Button
+								variant="outline"
+								onClick={() => setIsCreateTagDialogOpen(false)}
+							>
+								Cancel
+							</Button>
+							<Button
+								onClick={handleCreateTag}
+								disabled={!newTagName.trim()}
+							>
+								Create Tag
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
+
+				{/* Edit Tag Dialog */}
+				<Dialog
+					open={isEditTagDialogOpen}
+					onOpenChange={setIsEditTagDialogOpen}
+				>
+					<DialogContent>
+						<DialogHeader>
+							<DialogTitle>Edit Tag</DialogTitle>
+							<DialogDescription>
+								Update the tag details below.
+							</DialogDescription>
+						</DialogHeader>
+						<div className="space-y-4">
+							<div className="grid gap-2">
+								<label className="text-sm font-medium">
+									Tag Name
+								</label>
+								<Input
+									value={editTagName}
+									onChange={(e) =>
+										setEditTagName(e.target.value)
+									}
+								/>
+							</div>
+							<div className="grid gap-2">
+								<label className="text-sm font-medium">
+									Color
+								</label>
+								<Input
+									type="color"
+									value={editTagColor}
+									onChange={(e) =>
+										setEditTagColor(e.target.value)
+									}
+									className="w-20 h-10"
+								/>
+							</div>
+							<div className="grid gap-2">
+								<label className="text-sm font-medium">
+									Description
+								</label>
+								<Input
+									value={editTagDescription}
+									onChange={(e) =>
+										setEditTagDescription(e.target.value)
+									}
+								/>
+							</div>
+						</div>
+						<DialogFooter>
+							<Button
+								variant="outline"
+								onClick={() => setIsEditTagDialogOpen(false)}
+							>
+								Cancel
+							</Button>
+							<Button
+								onClick={handleUpdateTag}
+								disabled={!editTagName.trim()}
+							>
+								Update Tag
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
+
+				{/* Manage Tags Dialog */}
+				<Dialog
+					open={isManageTagsDialogOpen}
+					onOpenChange={setIsManageTagsDialogOpen}
+				>
+					<DialogContent className="max-w-2xl">
+						<DialogHeader>
+							<DialogTitle>Manage All Tags</DialogTitle>
+							<DialogDescription>
+								Create, edit, or delete tags. Changes will
+								affect all leads using these tags.
+							</DialogDescription>
+						</DialogHeader>
+						<div className="space-y-4">
+							{/* Tag List */}
+							<div className="border rounded-lg p-4 space-y-3 max-h-96 overflow-y-auto">
+								{tags.length > 0 ? (
+									tags.map((tag) => (
+										<div
+											key={tag.id}
+											className="flex items-center justify-between p-3 border rounded bg-muted/20"
+										>
+											<div className="flex items-center gap-3">
+												<div
+													className="w-4 h-4 rounded"
+													style={{
+														backgroundColor:
+															tag.color,
+													}}
+												/>
+												<div>
+													<div className="font-medium text-sm">
+														{tag.name}
+													</div>
+													{tag.description && (
+														<div className="text-xs text-muted-foreground">
+															{tag.description}
+														</div>
+													)}
+												</div>
+											</div>
+											<div className="flex items-center gap-2">
+												<Button
+													size="sm"
+													variant="outline"
+													onClick={() =>
+														openEditTagDialog(tag)
+													}
+												>
+													Edit
+												</Button>
+												<Button
+													size="sm"
+													variant="destructive"
+													onClick={() =>
+														handleDeleteTag(tag.id)
+													}
+												>
+													Delete
+												</Button>
+											</div>
+										</div>
+									))
+								) : (
+									<div className="text-center py-8 text-muted-foreground">
+										No tags available. Create your first tag
+										below.
+									</div>
+								)}
+							</div>
+
+							{/* Create New Tag */}
+							<div className="flex items-center gap-2">
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() =>
+										setIsCreateTagDialogOpen(true)
+									}
+									className="flex items-center gap-2"
+								>
+									<Plus className="w-4 h-4" />
+									Create New Tag
+								</Button>
+							</div>
+						</div>
+						<DialogFooter>
+							<Button
+								variant="outline"
+								onClick={() => setIsManageTagsDialogOpen(false)}
+							>
+								Close
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
 			</Card>
 		</TooltipProvider>
 	);

@@ -3,12 +3,13 @@ import type { Config } from 'drizzle-kit';
 export default {
 	schema: './lib/db/schema.ts',
 	out: './drizzle',
-	driver: 'pg',
+	dialect: 'postgresql',
 	dbCredentials: {
-		connectionString: `postgresql://${process.env.DB_USERNAME}:${
-			process.env.DB_PASSWORD
-		}@${process.env.DB_HOST}:${process.env.DB_PORT || '5432'}/${
-			process.env.DB_NAME
-		}`,
+		host: process.env.DB_HOST,
+		port: parseInt(process.env.DB_PORT || '5432'),
+		user: process.env.DB_USERNAME,
+		password: process.env.DB_PASSWORD,
+		database: process.env.DB_NAME,
+		ssl: false,
 	},
-};
+} as Config;

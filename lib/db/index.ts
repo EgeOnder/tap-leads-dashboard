@@ -1,6 +1,15 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
-import { website, leads, websiteRelations, leadsRelations } from './schema';
+import {
+	website,
+	leads,
+	websiteRelations,
+	leadsRelations,
+	users,
+	accounts,
+	sessions,
+	verifications,
+} from './schema';
 import { eq } from 'drizzle-orm';
 
 // Create PostgreSQL connection pool
@@ -18,6 +27,10 @@ export const db = drizzle(pool, {
 		leads,
 		websiteRelations,
 		leadsRelations,
+		users,
+		accounts,
+		sessions,
+		verifications,
 	},
 });
 

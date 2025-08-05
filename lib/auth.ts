@@ -1,19 +1,32 @@
-import bcrypt from 'bcryptjs';
+import { betterAuth } from 'better-auth';
+import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { admin as adminPlugin } from 'better-auth/plugins';
+import { db } from './db';
 
-// Get admin password from environment variable
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
-
-// Hash the admin password for comparison
-const HASHED_ADMIN_PASSWORD = bcrypt.hashSync(ADMIN_PASSWORD, 10);
-
-export function verifyPassword(password: string): boolean {
-	return bcrypt.compareSync(password, HASHED_ADMIN_PASSWORD);
-}
-
-export function hashPassword(password: string): string {
-	return bcrypt.hashSync(password, 10);
-}
-
-export function generateSessionToken(): string {
-	return Math.random().toString(36).substring(2) + Date.now().toString(36);
-}
+export const auth = betterAuth({
+	database: drizzleAdapter(db, {
+		provider: 'pg',
+		usePlural: true,
+	}),
+	emailAndPassword: {
+		enabled: true,
+		requireEmailVerification: false,
+	},
+	session: {
+		expiresIn: 60 * 60 * 24 * 7, // 7 days
+	},
+	cookies: {
+		sessionToken: {
+			name: 'auth-session-token',
+			httpOnly: true,
+			secure: process.env.NODE_ENV === 'production',
+			sameSite: 'lax',
+			maxAge: 60 * 60 * 24 * 7, // 7 days
+		},
+	},
+	pages: {
+		signIn: '/auth/signin',
+		signUp: '/auth/signup',
+	},
+	plugins: [adminPlugin()],
+});

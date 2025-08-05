@@ -29,7 +29,7 @@ export function Logo({
 		// Return a placeholder with the same dimensions to prevent layout shift
 		return (
 			<div
-				className={`bg-gray-200 dark:bg-gray-800 animate-pulse ${className}`}
+				className={`bg-muted animate-pulse ${className}`}
 				style={{ width, height }}
 			/>
 		);

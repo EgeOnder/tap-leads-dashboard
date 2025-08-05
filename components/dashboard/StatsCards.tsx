@@ -6,10 +6,19 @@ interface StatsCardsProps {
 }
 
 export function StatsCards({ leads }: StatsCardsProps) {
-	const totalLeads = leads.length;
-	const companiesCount = new Set(leads.map((lead) => lead.company)).size;
-	const websitesCount = new Set(leads.map((lead) => lead.websiteUrl)).size;
-	const leadsWithContact = leads.filter((lead) => lead.contactLink).length;
+	// Ensure leads is an array and handle potential errors
+	const leadsArray = Array.isArray(leads) ? leads : [];
+
+	const totalLeads = leadsArray.length;
+	const companiesCount = new Set(
+		leadsArray.map((lead) => lead.company).filter(Boolean)
+	).size;
+	const websitesCount = new Set(
+		leadsArray.map((lead) => lead.websiteUrl).filter(Boolean)
+	).size;
+	const leadsWithContact = leadsArray.filter(
+		(lead) => lead.contactLink
+	).length;
 
 	const stats = [
 		{
