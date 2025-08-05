@@ -6,6 +6,7 @@ import { Users, LogOut } from 'lucide-react';
 import Link from 'next/link';
 import { Switch } from '../ui/switch';
 import { useTheme } from 'next-themes';
+import { Logo } from '@/components/Logo';
 
 interface SidebarProps {
 	onLogout: () => void;
@@ -24,7 +25,7 @@ export function Sidebar({ onLogout }: SidebarProps) {
 	return (
 		<div className="fixed top-0 left-0 w-64 bg-card border-r border-border flex flex-col h-screen shadow-sm z-50">
 			<Link href="/" className="p-6 border-b border-border">
-				<img src="/logo/tap-logo.webp" alt="TAP Leads" />
+				<Logo alt="TAP Leads" />
 			</Link>
 
 			<nav className="flex-1 p-4 space-y-2">

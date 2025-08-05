@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Shield, Eye, EyeOff } from 'lucide-react';
+import { Logo } from '@/components/Logo';
 
 interface LoginFormProps {
 	onLogin: (password: string) => Promise<boolean>;
@@ -29,7 +30,7 @@ export function LoginForm({ onLogin, error, isLoading }: LoginFormProps) {
 		<div className="min-h-screen bg-gradient-to-br from-blue-50 via-background to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 flex items-center justify-center p-4">
 			<div className="w-full max-w-md">
 				<div className="text-center mb-8">
-					<img src="/logo/tap-logo.webp" alt="TAP Leads" />
+					<Logo alt="TAP Leads" width={200} height={80} />
 				</div>
 
 				<Card className="bg-card border-border shadow-lg">
