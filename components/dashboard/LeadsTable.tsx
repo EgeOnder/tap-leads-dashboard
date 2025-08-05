@@ -13,6 +13,13 @@ import {
 	TableRow,
 } from '@/components/ui/table';
 import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '@/components/ui/select';
+import {
 	Search,
 	MoreHorizontal,
 	Mail,
@@ -134,55 +141,67 @@ export function LeadsTable({ leads }: LeadsTableProps) {
 		<TooltipProvider>
 			<Card className="bg-card border-border shadow-sm">
 				<CardHeader>
-					<div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-						<div className="flex flex-col sm:flex-row gap-2 w-full justify-between items-center">
-							<h1 className="text-2xl font-bold text-foreground flex-1">
-								Leads available for{' '}
-								{companyFilter === 'all'
-									? 'all companies'
-									: companyFilter}
-							</h1>
-							<div className="flex flex-col sm:flex-row gap-2">
-								<div className="relative">
-									<Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-									<Input
-										placeholder="Search leads..."
-										value={searchTerm}
-										onChange={(e) =>
-											setSearchTerm(e.target.value)
-										}
-										className="pl-10 bg-background border-input text-foreground focus:border-ring focus:ring-ring w-full sm:w-64"
-									/>
-								</div>
-								<select
-									value={companyFilter}
+					<div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+						<h1 className="text-2xl font-bold text-foreground">
+							Leads available for{' '}
+							{companyFilter === 'all'
+								? 'all companies'
+								: companyFilter}
+						</h1>
+						<div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+							<div className="relative">
+								<Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+								<Input
+									placeholder="Search leads..."
+									value={searchTerm}
 									onChange={(e) =>
-										setCompanyFilter(e.target.value)
+										setSearchTerm(e.target.value)
 									}
-									className="px-3 py-2 bg-background border border-input rounded-md text-foreground text-sm focus:border-ring focus:ring-ring"
-								>
-									<option value="all">All Companies</option>
-									{uniqueCompanies.map((company) => (
-										<option key={company} value={company}>
-											{company}
-										</option>
-									))}
-								</select>
-								<select
-									value={websiteFilter}
-									onChange={(e) =>
-										setWebsiteFilter(e.target.value)
-									}
-									className="px-3 py-2 bg-background border border-input rounded-md text-foreground text-sm focus:border-ring focus:ring-ring"
-								>
-									<option value="all">All Websites</option>
-									{uniqueWebsites.map((website) => (
-										<option key={website} value={website}>
-											{website}
-										</option>
-									))}
-								</select>
+									className="pl-10 bg-background border-input text-foreground focus:border-ring focus:ring-ring w-full sm:w-64"
+								/>
 							</div>
+							<Select
+								onValueChange={setCompanyFilter}
+								value={companyFilter}
+							>
+								<SelectTrigger className="w-full sm:w-[180px]">
+									<SelectValue placeholder="Select Company" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">
+										All Companies
+									</SelectItem>
+									{uniqueCompanies.map((company) => (
+										<SelectItem
+											key={company}
+											value={company}
+										>
+											{company}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+							<Select
+								onValueChange={setWebsiteFilter}
+								value={websiteFilter}
+							>
+								<SelectTrigger className="w-full sm:w-[180px]">
+									<SelectValue placeholder="Select Website" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">
+										All Websites
+									</SelectItem>
+									{uniqueWebsites.map((website) => (
+										<SelectItem
+											key={website}
+											value={website}
+										>
+											{website}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
 						</div>
 					</div>
 				</CardHeader>
@@ -504,19 +523,31 @@ export function LeadsTable({ leads }: LeadsTableProps) {
 									{totalItems} leads
 								</span>
 								<span className="hidden sm:inline">•</span>
-								<select
-									value={itemsPerPage}
-									onChange={(e) => {
-										setItemsPerPage(Number(e.target.value));
+								<Select
+									value={itemsPerPage.toString()}
+									onValueChange={(value) => {
+										setItemsPerPage(Number(value));
 										setCurrentPage(1);
 									}}
-									className="px-2 py-1 bg-background border border-input rounded text-xs focus:border-ring focus:ring-ring"
 								>
-									<option value={5}>5 per page</option>
-									<option value={10}>10 per page</option>
-									<option value={20}>20 per page</option>
-									<option value={50}>50 per page</option>
-								</select>
+									<SelectTrigger className="w-[120px] h-8 text-xs">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="5">
+											5 per page
+										</SelectItem>
+										<SelectItem value="10">
+											10 per page
+										</SelectItem>
+										<SelectItem value="20">
+											20 per page
+										</SelectItem>
+										<SelectItem value="50">
+											50 per page
+										</SelectItem>
+									</SelectContent>
+								</Select>
 							</div>
 
 							<div className="flex items-center gap-1">
