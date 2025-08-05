@@ -43,6 +43,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import React from 'react';
+import Link from 'next/link';
 
 interface LeadsTableProps {
 	leads: any[];
@@ -51,6 +52,7 @@ interface LeadsTableProps {
 export function LeadsTable({ leads }: LeadsTableProps) {
 	const [searchTerm, setSearchTerm] = useState('');
 	const [companyFilter, setCompanyFilter] = useState<string>('all');
+	const [websiteFilter, setWebsiteFilter] = useState<string>('all');
 	const [currentPage, setCurrentPage] = useState(1);
 	const [itemsPerPage, setItemsPerPage] = useState(10);
 	const { toast } = useToast();
@@ -71,13 +73,17 @@ export function LeadsTable({ leads }: LeadsTableProps) {
 				.includes(searchTerm.toLowerCase());
 		const matchesCompany =
 			companyFilter === 'all' || lead.company === companyFilter;
-		return matchesSearch && matchesCompany;
+		const matchesWebsite =
+			websiteFilter === 'all' ||
+			(lead.websiteUrl &&
+				new URL(lead.websiteUrl).hostname === websiteFilter);
+		return matchesSearch && matchesCompany && matchesWebsite;
 	});
 
 	// Reset to first page when filters change
 	React.useEffect(() => {
 		setCurrentPage(1);
-	}, [searchTerm, companyFilter]);
+	}, [searchTerm, companyFilter, websiteFilter]);
 
 	// Pagination logic
 	const totalItems = filteredLeads.length;
@@ -88,6 +94,15 @@ export function LeadsTable({ leads }: LeadsTableProps) {
 
 	const uniqueCompanies = Array.from(
 		new Set(leads.map((lead) => lead.company).filter(Boolean))
+	);
+
+	const uniqueWebsites = Array.from(
+		new Set(
+			leads
+				.map((lead) => lead.websiteUrl)
+				.filter(Boolean)
+				.map((url) => new URL(url).hostname)
+		)
 	);
 
 	const goToPage = (page: number) => {
@@ -153,6 +168,20 @@ export function LeadsTable({ leads }: LeadsTableProps) {
 										</option>
 									))}
 								</select>
+								<select
+									value={websiteFilter}
+									onChange={(e) =>
+										setWebsiteFilter(e.target.value)
+									}
+									className="px-3 py-2 bg-background border border-input rounded-md text-foreground text-sm focus:border-ring focus:ring-ring"
+								>
+									<option value="all">All Websites</option>
+									{uniqueWebsites.map((website) => (
+										<option key={website} value={website}>
+											{website}
+										</option>
+									))}
+								</select>
 							</div>
 						</div>
 					</div>
@@ -213,16 +242,28 @@ export function LeadsTable({ leads }: LeadsTableProps) {
 											{lead.jobTitle || 'Not specified'}
 										</TableCell>
 										<TableCell>
-											<div className="flex items-center space-x-2">
-												<Globe className="w-4 h-4 text-muted-foreground" />
-												<span className="text-foreground text-sm">
-													{lead.websiteUrl
-														? new URL(
+											{lead.websiteUrl ? (
+												<div className="flex items-center space-x-2 group">
+													<Globe className="w-4 h-4 text-muted-foreground" />
+													<Link
+														href={lead.websiteUrl}
+														target="_blank"
+														rel="noopener noreferrer"
+														className="text-foreground text-sm hover:underline transition-all duration-200 relative"
+													>
+														{
+															new URL(
 																lead.websiteUrl
-														  ).hostname
-														: 'Unknown'}
+															).hostname
+														}
+														<ExternalLink className="w-3 h-3 ml-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute -right-4 top-0" />
+													</Link>
+												</div>
+											) : (
+												<span className="text-foreground text-sm">
+													Unknown
 												</span>
-											</div>
+											)}
 										</TableCell>
 										<TableCell className="text-foreground">
 											{lead.location || 'Not specified'}
