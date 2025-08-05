@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { leads, users, tags, leadTags, website } from '@/lib/db/schema';
-import { eq, and, isNull, or } from 'drizzle-orm';
+import { eq, and, isNull, or, inArray } from 'drizzle-orm';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
@@ -68,9 +68,6 @@ export async function GET(request: NextRequest) {
 					.from(users)
 					.where(eq(users.id, userIdArray[0]));
 			} else {
-				const whereCondition = userIdArray
-					.map((id) => eq(users.id, id))
-					.reduce((acc, condition) => or(acc, condition));
 				usersData = await db
 					.select({
 						id: users.id,
@@ -78,7 +75,7 @@ export async function GET(request: NextRequest) {
 						email: users.email,
 					})
 					.from(users)
-					.where(whereCondition);
+					.where(inArray(users.id, userIdArray));
 			}
 		}
 
